@@ -35,6 +35,8 @@ def load(ckpt):
     predictions = tf.get_collection('preds')[0]
     print(predictions)
 
+    tf.summary.FileWriter('./graph_logs', graph=sess.graph)
+
 
     # load existing loss, or erase it, if creating new one
     '''g.clear_collection('losses')
