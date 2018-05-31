@@ -1,5 +1,25 @@
 import tensorflow as tf
 
+
+def lrelu(inputs, alpha=0.2):
+  return tf.maximum(alpha * inputs, inputs)
+
+
+def apply_phaseshuffle(x, rad, pad_type='reflect'):
+  b, x_len, nch = x.get_shape().as_list()
+
+  phase = tf.random_uniform([], minval=-rad, maxval=rad + 1, dtype=tf.int32)
+  pad_l = tf.maximum(phase, 0)
+  pad_r = tf.maximum(-phase, 0)
+  phase_start = pad_r
+  x = tf.pad(x, [[0, 0], [pad_l, pad_r], [0, 0]], mode=pad_type)
+
+  x = x[:, phase_start:phase_start+x_len]
+  x.set_shape([b, x_len, nch])
+
+  return x
+
+
 '''
 Here we define the architecture for the descriminator. We are using the
 Descriminator architecture from the WaveGan paper. 
