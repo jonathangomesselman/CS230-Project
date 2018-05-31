@@ -19,12 +19,12 @@ def load(ckpt):
     #saver = tf.train.Saver()
 
     # load graph
+    sess = tf.Session()
     saver = tf.train.import_meta_graph(meta)
     g = tf.get_default_graph()
 
     # load weights
     #sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
-    sess = tf.Session()
     saver.restore(sess, checkpoint)
 
     # get graph tensors
@@ -35,8 +35,13 @@ def load(ckpt):
     predictions = tf.get_collection('preds')[0]
     print(predictions)
 
-    tf.summary.FileWriter('./graph_logs', graph=sess.graph)
+    w = tf.summary.FileWriter('graph_logs')
 
+    w.add_graph(tf.get_default_graph())
+    w.flush()
+    w.close()
+    #writer.close()
+    sess.close()
 
     # load existing loss, or erase it, if creating new one
     '''g.clear_collection('losses')
@@ -48,6 +53,7 @@ def load(ckpt):
 
 def main():
 	load('./singlespeaker.lr0.000300.1.g4.b64/model.ckpt-53')
+    #load('./model.ckpt-53')
 
 if __name__ == '__main__':
   main()
