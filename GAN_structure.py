@@ -25,13 +25,16 @@ Here we define the architecture for the descriminator. We are using the
 Descriminator architecture from the WaveGan paper. 
 '''
 """
-  We likely need to change this???
-  Input: [None, 16384, 1]
-  # Likely want this to be 16000!!!!!!!!!!!!
-  Output: [None] (linear output)
+    We likely need to change this???
+    Input: [None, 16384, 1] - Old
+    Input-New: [None, 8192, 1]
+    # Likely want this to be 16000!!!!!!!!!!!!
+    Output: [None] (linear output)
 """
 def Discriminator(x, kernel_len=25, dim=64, use_batchnorm=False, phaseshuffle_rad=0):
-    batch_size = tf.shape(x)[0]
+    #batch_size = tf.shape(x)[0]
+    # Avoid batchnorm
+    batch_size = 1
 
     if use_batchnorm:
 	   batchnorm = lambda x: tf.layers.batch_normalization(x, training=True)
@@ -44,8 +47,10 @@ def Discriminator(x, kernel_len=25, dim=64, use_batchnorm=False, phaseshuffle_ra
 	   phaseshuffle = lambda x: x
 
     # Layer 0
-    # [16384, 1] -> [4096, 64]
+    # [16384, 1] -> [4096, 64] - Old
+    # [8192, 1] -> [2048, 64] - New
     output = x
+    print output 
     with tf.variable_scope('downconv_0'):
         #output = tf.layers.conv1d(output, dim, kernel_len, 4, padding='SAME')
         filter = tf.get_variable('Fl', shape=[kernel_len, 1, dim],
@@ -56,7 +61,8 @@ def Discriminator(x, kernel_len=25, dim=64, use_batchnorm=False, phaseshuffle_ra
     output = phaseshuffle(output)
 
     # Layer 1
-    # [4096, 64] -> [1024, 128]
+    # [4096, 64] -> [1024, 128] - Old
+    # [2048, 64] -> [512, 128] - New
     with tf.variable_scope('downconv_1'):
         filter = tf.get_variable('Fl', shape=[kernel_len, dim, dim * 2],
                           initializer=tf.random_normal_initializer(stddev=1e-3))
@@ -66,7 +72,8 @@ def Discriminator(x, kernel_len=25, dim=64, use_batchnorm=False, phaseshuffle_ra
     output = phaseshuffle(output)
 
     # Layer 2
-    # [1024, 128] -> [256, 256]
+    # [1024, 128] -> [256, 256] - Old
+    # [512, 128] -> [128, 256] - New
     with tf.variable_scope('downconv_2'):
         filter = tf.get_variable('Fl', shape=[kernel_len, dim * 2, dim * 4],
                           initializer=tf.random_normal_initializer(stddev=1e-3))
@@ -76,7 +83,8 @@ def Discriminator(x, kernel_len=25, dim=64, use_batchnorm=False, phaseshuffle_ra
     output = phaseshuffle(output)
 
     # Layer 3
-    # [256, 256] -> [64, 512]
+    # [256, 256] -> [64, 512] - Old
+    # [128, 256] -> [32, 512] - New
     with tf.variable_scope('downconv_3'):
         filter = tf.get_variable('Fl', shape=[kernel_len, dim * 4, dim * 8],
                           initializer=tf.random_normal_initializer(stddev=1e-3))
@@ -87,6 +95,7 @@ def Discriminator(x, kernel_len=25, dim=64, use_batchnorm=False, phaseshuffle_ra
 
   	# Layer 4
   	# [64, 512] -> [16, 1024]
+    # [32, 512] -> [8, 1024]
     with tf.variable_scope('downconv_4'):
         filter = tf.get_variable('Fl', shape=[kernel_len, dim * 8, dim * 16],
                           initializer=tf.random_normal_initializer(stddev=1e-3))
@@ -95,12 +104,15 @@ def Discriminator(x, kernel_len=25, dim=64, use_batchnorm=False, phaseshuffle_ra
     output = lrelu(output)
 
     # Flatten
-    output = tf.reshape(output, [batch_size, 4 * 4 * dim * 16])
-    print tf.shape(output)
+    # We now have to flatten it to a different size [8192]
+    #output = tf.reshape(output, [batch_size, 4 * 4 * dim * 16])
+    output = tf.reshape(output, [batch_size, 8192])
 
   	# Connect to single logit
     with tf.variable_scope('output'):
-        W = tf.get_variable('W', shape=[4 * 4 * dim * 16, 1], initializer=tf.random_normal_initializer(stddev=1e-3))
+        #W = tf.get_variable('W', shape=[4 * 4 * dim * 16, 1], initializer=tf.random_normal_initializer(stddev=1e-3))
+        # New shape 8192
+        W = tf.get_variable('W', shape=[8192, 1], initializer=tf.random_normal_initializer(stddev=1e-3))
         b = tf.zeros([batch_size, 1])
         output = tf.matmul(output, W) + b
         output = output[:, 0]

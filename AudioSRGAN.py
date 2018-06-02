@@ -33,6 +33,7 @@ def load(ckpt):
 
     # save tensors as instance variables
     inputs = X, Y, alpha
+    print tf.shape(X)
     predictions = tf.get_collection('preds')[0]
     print(predictions)
 

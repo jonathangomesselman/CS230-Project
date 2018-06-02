@@ -7,6 +7,7 @@ import keras
 import librosa
 from scipy import interpolate
 from scipy.signal import decimate
+from GAN_structure import Discriminator
 #from keras import backend as K
 # tensorflow backend
 #from dataset import DataSet
@@ -90,7 +91,7 @@ def upsample_wav(wav, inputs, predictions, sess):
   S = get_spectrum(x_lr, n_fft=2048/args.r)
   save_spectrum(S, outfile=outname + '.lr.png')'''
 
-def load(ckpt):
+def load(ckpt, sess):
     # get checkpoint name
     if os.path.isdir(ckpt): checkpoint = tf.train.latest_checkpoint(ckpt)
     else: checkpoint = ckpt
@@ -110,16 +111,17 @@ def load(ckpt):
     # load weights
     #sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
     #sess = tf.Session()
-    with tf.Session() as sess:
-        saver.restore(sess, checkpoint)
-        # get graph tensors
-        X, Y, alpha = tf.get_collection('inputs')
-        # save tensors as instance variables
-        inputs = X, Y, alpha
-        predictions = tf.get_collection('preds')[0]
-        print(predictions)
-        #return inputs, predictions
-        upsample_wav('p225/p225_001.wav', inputs, predictions, sess)
+    #with tf.Session() as sess:
+    saver.restore(sess, checkpoint)
+    # get graph tensors
+    X, Y, alpha = tf.get_collection('inputs')
+    # save tensors as instance variables
+    inputs = X, Y, alpha
+    predictions = tf.get_collection('preds')[0]
+    return predictions
+    #print(predictions)
+    #return inputs, predictions
+    #upsample_wav('p225/p225_001.wav', inputs, predictions, sess)
     #print(predictions.eval(session=sess))
     #keras.callbacks.TensorBoard(log_dir='./keras_logs', histogram_freq=0, batch_size=32, write_graph=True, write_grads=False, write_images=False, embeddings_freq=0)
     #tf.summary.FileWriter('./singlespeaker.lr0.000300.1.g4.b64', graph=sess.graph)
@@ -134,10 +136,88 @@ def load(ckpt):
     g.clear_collection('train_op')
     tf.add_to_collection('train_op', self.train_op)'''
 
+def buildGanTrainOps(sess):
+    # Note one thing that we need is the input data!!
+
+    # Get the generator
+    # We may have to do it is with variable scoe generator?
+    with tf.variable_scope('G'):
+        generator = load('./singlespeaker.lr0.000300.1.g4.b64/model.ckpt-53', sess)
+    # This should work
+    G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
+    #G_vars = tf.get_collection('preds')
+
+    # We may want to print the summary of the graph later
+
+    # Create a real and fake discriminator
+
+    # Real discriminator takes as input the real high quality audio
+    # This is where we would upload our actual data
+    X_Disc = tf.placeholder(tf.float32, shape=(None, 8192, 1), name='X')
+    with tf.name_scope('D_real'), tf.variable_scope('D'):
+        D_r = Discriminator(X_Disc)
+    # Get the variable scops
+    D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='D')
+
+    # Create the fake discriminator
+    with tf.name_scope('D_fake'), tf.variable_scope('D', reuse=True):
+        D_f = Discriminator(generator)
+
+
+    # Create the loss functions
+    G_loss = -tf.reduce_mean(generator)
+    D_loss = tf.reduce_mean(D_f) - tf.reduce_mean(D_r)
+
+    # Enforce Lipschitz constraint for WGAN
+    with tf.name_scope('D_clip_weights'):
+        clip_ops = []
+        for var in D_vars:
+            clip_bounds = [-.01, .01]
+            clip_ops.append(
+                tf.assign(
+                    var,
+                    tf.clip_by_value(var, clip_bounds[0], clip_bounds[1])
+                )
+            )
+        D_clip_weights = tf.group(*clip_ops)
+
+    # Creat the optimizer
+    # Just using what wgna
+    G_opt = tf.train.RMSPropOptimizer(
+        learning_rate=5e-5)
+    D_opt = tf.train.RMSPropOptimizer(
+        learning_rate=5e-5)
+
+    # Create training ops
+    #G_train_op = G_opt.minimize(G_loss, var_list=G_vars,
+    #    global_step=tf.train.get_or_create_global_step())
+    # Removed globel_step
+    #print G_vars
+    G_train_op = G_opt.minimize(G_loss, var_list=G_vars)
+    D_train_op = D_opt.minimize(D_loss, var_list=D_vars)
+
+    #return G_train_op, D_train_op
+
+
+#def train(G_train_op, D_train_op):
+
+
 def main():
-    load('./singlespeaker.lr0.000300.1.g4.b64/model.ckpt-53')
+
+    sess = tf.Session()
+
+    #G_train_op, D_train_op = buildGanTrainOps(sess)
+    buildGanTrainOps(sess)
+    w = tf.summary.FileWriter('graph_logs')
+
+    w.add_graph(tf.get_default_graph())
+    w.flush()
+    w.close()
+    sess.close()
+    #load('./singlespeaker.lr0.000300.1.g4.b64/model.ckpt-53')
     #inputs, predictions = load('./singlespeaker.lr0.000300.1.g4.b64/model.ckpt-53')
     #upsample_wav('p225/p225_001.wav', inputs, predictions)
+
 
 if __name__ == '__main__':
   main()
