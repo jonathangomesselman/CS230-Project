@@ -32,9 +32,9 @@ Descriminator architecture from the WaveGan paper.
     Output: [None] (linear output)
 """
 def Discriminator(x, kernel_len=25, dim=64, use_batchnorm=False, phaseshuffle_rad=0):
-    #batch_size = tf.shape(x)[0]
+    batch_size = tf.shape(x)[0]
     # Avoid batchnorm
-    batch_size = 1
+    #batch_size = 1
 
     if use_batchnorm:
 	   batchnorm = lambda x: tf.layers.batch_normalization(x, training=True)
