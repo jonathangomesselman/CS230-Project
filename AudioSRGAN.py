@@ -6,6 +6,7 @@ import tensorflow as tf
 
 import librosa
 from keras import backend as K
+from GAN_structure import Discriminator
 #from dataset import DataSet
 
 
@@ -34,6 +35,10 @@ def load(ckpt):
     inputs = X, Y, alpha
     predictions = tf.get_collection('preds')[0]
     print(predictions)
+
+    X_Disc = tf.placeholder(tf.float32, shape=(None, 16384, 1), name='X')
+    discriminator = Discriminator(X_Disc)
+
 
     w = tf.summary.FileWriter('graph_logs')
 
