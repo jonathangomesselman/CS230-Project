@@ -28,7 +28,6 @@ Descriminator architecture from the WaveGan paper.
     We likely need to change this???
     Input: [None, 16384, 1] - Old
     Input-New: [None, 8192, 1]
-    # Likely want this to be 16000!!!!!!!!!!!!
     Output: [None] (linear output)
 """
 def Discriminator(x, kernel_len=25, dim=64, use_batchnorm=False, phaseshuffle_rad=0):
