@@ -212,6 +212,9 @@ class AudioSRGanModel:
 					return w*tf.nn.sigmoid_cross_entropy_with_logits(logits=x, labels=y)
 				except:
 					return w*tf.nn.sigmoid_cross_entropy_with_logits(logits=x, labels=y)
+			elif self.config.gan == 'WGan': #Wessertein gan
+				# Simply return the logits
+				return x
 
         
 		content_loss = inference_mse_content_loss(real, fake)
@@ -232,8 +235,32 @@ class AudioSRGanModel:
         
 		# self.config.lambd is a paramter that we can set as our configuraion but 
 		# they define it as 0.001
-		d_loss =  self.config.lambd*(d_fake_loss+d_real_loss)
-		g_loss = content_loss + self.config.lambd*g_fake_loss
+		d_loss = 0
+		if self.config.gan == 'SRGan':
+			d_loss =  self.config.lambd*(d_fake_loss+d_real_loss)
+		elif self.config.gan == 'WGan':
+			# NOTE!!! THis appears flipped because I believe that the loss calculations are backwards
+			d_loss = tf.reduce_mean(d_fake_logits) -  tf.reduce_mean(d_real_logits)
+
+		# Set up the weight weight clipping if we are using wesserstein gans
+		with tf.name_scope('D_clip_weights'):
+			clip_ops = []
+			for var in self.d_vars:
+				clip_bounds = [-.01, .01]
+				clip_ops.append(
+				tf.assign(
+					var,
+					tf.clip_by_value(var, clip_bounds[0], clip_bounds[1])
+					)
+				)
+	      	self.D_clip_weights = tf.group(*clip_ops)
+
+	    g_loss = 0
+	    if self.config.gan == 'SRGan':
+			g_loss = content_loss + self.config.lambd*g_fake_loss
+		elif self.config.gan =='WGan':
+			# May want a constant
+			g_loss = content_loss - tf.reduce_mean(d_fake_logits)
         
 		return d_loss, g_loss, content_loss
 
@@ -287,7 +314,11 @@ class AudioSRGanModel:
 				# Here we will train the discriminator more!
 				# Train suggested 5 times discriminator per generator
 				for i in xrange(self.config.d_updates):
-					_, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict={self.input_target:batch_HR, self.input_generator: batch_LR})
+					if self.config.gan == 'SRGan':
+						_, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict={self.input_target:batch_HR, self.input_generator: batch_LR})
+					elif self.config.gan == 'WGan':
+						_, d_loss, summaries, _ = self.sess.run([self.d_optim, self.d_loss, self.summaries, self.D_clip_weights], feed_dict={self.input_target:batch_HR, self.input_generator: batch_LR})
+
 					print 'here'
 
 				# Train the generator
