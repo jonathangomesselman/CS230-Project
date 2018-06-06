@@ -136,6 +136,7 @@ def load(ckpt, sess):
     g.clear_collection('train_op')
     tf.add_to_collection('train_op', self.train_op)'''
 
+
 def buildGanTrainOps(sess):
     # Note one thing that we need is the input data!!
 
@@ -144,7 +145,7 @@ def buildGanTrainOps(sess):
     with tf.variable_scope('G'):
         generator = load('./singlespeaker.lr0.000300.1.g4.b64/model.ckpt-53', sess)
     # This should work
-    G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
+    G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='G')
     #G_vars = tf.get_collection('preds')
 
     # We may want to print the summary of the graph later
