@@ -20,7 +20,7 @@ class Model(object):
                opt_params=default_opt, log_prefix='./run'):
 
     # create session
-    # self.sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
+    #self.sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
     gpu_options = tf.GPUOptions(allow_growth=True)
     self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
     K.set_session(self.sess) # pass keras the session
@@ -78,14 +78,17 @@ class Model(object):
     self.optimizer = self.create_optimzier(opt_params)
 
     # create gradients
-    grads = self.create_gradients(self.loss, params)
+    '''Commented out due to uninitialized value issue'''
+    #grads = self.create_gradients(self.loss, params)
 
     # create training op
     with tf.name_scope('optimizer'):
-      train_op = self.create_updates(params, grads, alpha, opt_params)
+      train_op = self.optimizer.minimize(self.loss)
+      '''removed because of uninitialized value issue'''
+      #train_op = self.create_updates(params, grads, alpha, opt_params)
 
     # initialize the optimizer variabLes
-    optimizer_vars = [ v for v in tf.global_variables() if 'optimizer/' in v.name ]
+    optimizer_vars = [ v for v in tf.global_variables() if ('optimizer/' in v.name or 'Adam' in v.name)]
     init = tf.variables_initializer(optimizer_vars)
     self.sess.run(init)
 
@@ -144,6 +147,8 @@ class Model(object):
     # use the optimizer to apply the gradients that minimize the loss
     gv = zip(grads, params)
     train_op = self.optimizer.apply_gradients(gv, global_step=self.global_step)
+
+
     
     return train_op
 
@@ -197,6 +202,8 @@ class Model(object):
     # load data into DataSet
     train_data = DataSet(X_train, Y_train)
     val_data   = DataSet(X_val, Y_val)
+    print('X_train shape: ', X_train.shape)
+    print('Y_train shape ', Y_train.shape)
 
     # train the model
     start_time = time.time()
@@ -267,9 +274,12 @@ class Model(object):
     # this is ugly, but only way I found to get this var after model reload
     g = tf.get_default_graph()
     k_tensors = [n for n in g.as_graph_def().node if 'keras_learning_phase' in n.name]
-    assert len(k_tensors) <= 1
+    #print(k_tensors)
+    #print(len(k_tensors))
+    #assert len(k_tensors) <= 1
     if k_tensors: 
-      k_learning_phase = g.get_tensor_by_name(k_tensors[0].name + ':0')
+      #k_learning_phase = g.get_tensor_by_name(k_tensors[0].name + ':0')
+      k_learning_phase = g.get_tensor_by_name(k_tensors[1].name + ':0')
       feed_dict[k_learning_phase] = train
 
     return feed_dict

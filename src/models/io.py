@@ -18,9 +18,31 @@ def load_h5(h5_path):
     print 'Shape of X:', X.shape
     print 'Shape of Y:', Y.shape
 
+    '''x_lr = X[0]
+    x_hr = Y[0]
+    print(x_hr)
+    print(x_lr)'''
+    #P = model.predict(x_lr.reshape((1,len(x_lr),1)))
+    #x_pr = P.flatten()
+    #x_hr = x_hr[:len(x_pr)]
+    #x_lr = x_lr[:len(x_pr)]
+
+    '''initpath = '3test'
+    out_label = 'singlespeakertest'
+    fs = 16000
+    outname = "TestGeneratorInput/" + initpath + '.' + out_label
+    librosa.output.write_wav(outname + '.hr.wav', x_hr, fs)  
+    librosa.output.write_wav(outname + '.lr.wav', x_lr, fs)  
+    #librosa.output.write_wav(outname + '.pr.wav', x_pr, fs)
+    exit()'''
+
   return X, Y
 
 def upsample_wav(wav, args, model):
+
+  #changes to path to make code work
+  initpath = wav
+  wav = "p225/" + wav
   # load signal
   x_hr, fs = librosa.load(wav, sr=args.sr)
 
@@ -39,18 +61,21 @@ def upsample_wav(wav, args, model):
   x_lr = x_lr[:len(x_pr)]
 
   # save the file
-  outname = wav + '.' + args.out_label
+  outname = "ProcessedDataRate=4/" + initpath + '.' + args.out_label
+  lowoutname = "ProcessedDataRateLowRes/" + initpath + '.' + args.out_label
+  #outname = wav + '.' + args.out_label
   librosa.output.write_wav(outname + '.hr.wav', x_hr, fs)  
-  librosa.output.write_wav(outname + '.lr.wav', x_lr, fs / args.r)  
+  #librosa.output.write_wav(outname + '.lr.wav', x_lr, fs / args.r)  
+  librosa.output.write_wav(lowoutname + '.lr.wav', x_lr, fs / args.r)
   librosa.output.write_wav(outname + '.pr.wav', x_pr, fs)  
 
   # save the spectrum
-  S = get_spectrum(x_pr, n_fft=2048)
+  '''S = get_spectrum(x_pr, n_fft=2048)
   save_spectrum(S, outfile=outname + '.pr.png')
   S = get_spectrum(x_hr, n_fft=2048)
   save_spectrum(S, outfile=outname + '.hr.png')
   S = get_spectrum(x_lr, n_fft=2048/args.r)
-  save_spectrum(S, outfile=outname + '.lr.png')
+  save_spectrum(S, outfile=outname + '.lr.png')'''
 
 # ----------------------------------------------------------------------------
 
