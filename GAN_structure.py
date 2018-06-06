@@ -111,11 +111,11 @@ def Discriminator(x, kernel_len=25, dim=64, use_batchnorm=False, phaseshuffle_ra
     with tf.variable_scope('output'):
         #W = tf.get_variable('W', shape=[4 * 4 * dim * 16, 1], initializer=tf.random_normal_initializer(stddev=1e-3))
         # New shape 8192
-        W = tf.get_variable('W', shape=[8192, 1], initializer=tf.random_normal_initializer(stddev=1e-3))
-        b = tf.zeros([batch_size, 1])
-        output = tf.matmul(output, W) + b
-        output = output[:, 0]
-        #output = tf.layers.dense(output, 1)[:, 0]
+        #W = tf.get_variable('W', shape=[8192, 1], initializer=tf.random_normal_initializer(stddev=1e-3))
+        #b = tf.zeros([batch_size, 1])
+        #output = tf.matmul(output, W) + b
+        #output = output[:, 0]
+        output = tf.layers.dense(output, 1)[:, 0]
 
   	# Don't need to aggregate batchnorm update ops like we do for the generator because we only use the discriminator for training
 
