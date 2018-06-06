@@ -142,10 +142,10 @@ def buildGanTrainOps(sess):
 
     # Get the generator
     # We may have to do it is with variable scoe generator?
-    with tf.variable_scope('G'):
-        generator = load('./singlespeaker.lr0.000300.1.g4.b64/model.ckpt-53', sess)
+    #with tf.variable_scope('G'):
+    generator = load('./singlespeaker.lr0.000300.1.g4.b64/model.ckpt-53', sess)
     # This should work
-    G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='G')
+    G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
     #G_vars = tf.get_collection('preds')
 
     # We may want to print the summary of the graph later

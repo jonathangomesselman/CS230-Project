@@ -7,7 +7,6 @@ import keras
 import librosa
 from scipy import interpolate
 from scipy.signal import decimate
-from GAN_structure import Discriminator
 from h5Converter import load_h5
 
 class AudioSRGanModel:
@@ -40,6 +39,8 @@ class AudioSRGanModel:
 		saver.restore(self.sess, checkpoint)
 		# Get the input tensor for the generator
 		self.input_generator, Y, alpha = tf.get_collection('inputs')
+		print self.input_generator.shape
+		#self.input_generator = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'discriminatorGan')
 		# Get graph tensors
 		predictions = tf.get_collection('preds')[0]
 		return predictions
@@ -175,9 +176,9 @@ class AudioSRGanModel:
 
 		self.real = self.input_target
 		# Define the generator and get the variables with generator scope
-		with tf.variable_scope('G-Gan'):
-			self.fake = self.generator()
-		self.g_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='G-Gan')
+		#with tf.variable_scope('G-Gan'):
+		self.fake = self.generator()
+		self.g_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
 
 		# Get the loss functions
 		self.d_loss, self.g_loss, self.content_loss = self.inference_loss(self.real, self.fake)
@@ -290,7 +291,7 @@ class AudioSRGanModel:
 					print 'here'
 
 				# Train the generator
-				_, g_loss, psnr, summaries= self.sess.run([self.g_optim, self.g_loss, self.summaries], feed_dict={self.input_target:batch_HR, self.input_generator: batch_LR})
+				_, g_loss, summaries= self.sess.run([self.g_optim, self.g_loss, self.summaries], feed_dict={self.input_target:batch_HR, self.input_generator: batch_LR})
 				end_time = time.time()
 				print('epoch{}[{}/{}]:total_time:{:.4f},d_loss:{:.4f},g_loss:{:4f},psnr:{:.4f}'.format(epoch, idx, batch_idxs, end_time-start_time, d_loss, g_loss, psnr))
 
