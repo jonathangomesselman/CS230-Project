@@ -237,6 +237,7 @@ class AudioSRGanModel:
             doptim = tf.train.RMSPropOptimizer(learning_rate=self.config.lr, name='RMSDiscrim')
             self.g_optim = tf.train.RMSPropOptimizer(learning_rate=self.config.lr, name='RMSGen').minimize(self.g_loss, var_list=self.g_vars)
             gv_d = doptim.compute_gradients(self.d_loss, var_list=self.d_vars)
+            
             clip_bounds = [-.01, .01]
             capped_grads = [(tf.clip_by_value(grad, clip_bounds[0], clip_bounds[1]), var) for grad, var in gv_d]
             self.d_optim = doptim.apply_gradients(capped_grads)
@@ -303,7 +304,7 @@ class AudioSRGanModel:
             d_loss = tf.reduce_mean(d_real_logits) -  tf.reduce_mean(d_fake_logits)
 
         # Set up the weight weight clipping if we are using wesserstein gans
-        '''with tf.name_scope('D_clip_weights'):
+        with tf.name_scope('D_clip_weights'):
             clip_ops = []
             for var in self.d_vars:
                 clip_bounds = [-.01, .01]
@@ -313,7 +314,7 @@ class AudioSRGanModel:
                     tf.clip_by_value(var, clip_bounds[0], clip_bounds[1])
                     )
                 )
-            self.D_clip_weights = tf.group(*clip_ops)'''
+            self.D_clip_weights = tf.group(*clip_ops)
 
         g_loss = 0
         if self.config.gan == 'SRGan':
@@ -382,10 +383,11 @@ class AudioSRGanModel:
                 for i in xrange(self.config.d_updates):
                     if self.config.gan == 'SRGan':
                         #_, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict={self.input_target:batch_HR, self.input_generator: batch_LR})
-                         _, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict=feed_dict)
+                        _, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict=feed_dict)
                     elif self.config.gan == 'WGan':
                         #_, d_loss, summaries, _ = self.sess.run([self.d_optim, self.d_loss, self.summaries, self.D_clip_weights], feed_dict={self.input_target:batch_HR, self.input_generator: batch_LR})
-                         _, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict=feed_dict)
+                        self.sess.run(self.D_clip_weights)
+                        _, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict=feed_dict)
 
                     #print 'here'
 
