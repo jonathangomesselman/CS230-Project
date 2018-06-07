@@ -236,11 +236,12 @@ class AudioSRGanModel:
         elif self.config.gan == 'WGan':
             doptim = tf.train.RMSPropOptimizer(learning_rate=self.config.lr, name='RMSDiscrim')
             self.g_optim = tf.train.RMSPropOptimizer(learning_rate=self.config.lr, name='RMSGen').minimize(self.g_loss, var_list=self.g_vars)
-            gv_d = doptim.compute_gradients(self.d_loss, var_list=self.d_vars)
+            #gv_d = doptim.compute_gradients(self.d_loss, var_list=self.d_vars)
+            gv_d = tf.gradients(self.d_loss, self.d_vars)
             
-            clip_bounds = [-.01, .01]
-            capped_grads = [(tf.clip_by_value(grad, clip_bounds[0], clip_bounds[1]), var) for grad, var in gv_d]
-            self.d_optim = doptim.apply_gradients(capped_grads)
+            #clip_bounds = [-.01, .01]
+            capped_grads, _ = (tf.clip_by_global_norm(gv_d, 1.0))
+            self.d_optim = doptim.apply_gradients(zip(capped_grads, self.d_vars))
 
         # May not need this stuff
         # This is just for logs
@@ -408,4 +409,4 @@ class AudioSRGanModel:
                 '''
                 counter = counter+1
             if ((epoch / 1) == epoch):
-                self.saver.save(self.sess, './', global_step = epoch + 1)
+                self.saver.save(self.sess, './GANWass', global_step = epoch + 1)
