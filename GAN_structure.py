@@ -54,7 +54,6 @@ def Discriminator(x, kernel_len=25, dim=64, use_batchnorm=False, phaseshuffle_ra
         #output = tf.layers.conv1d(output, dim, kernel_len, 4, padding='SAME')
         filter = tf.get_variable('Fl', shape=[kernel_len, 1, dim],
                           initializer=tf.random_normal_initializer(stddev=1e-3))
-        #filter = tf.zeros([3, 16, 16])
         output = tf.nn.conv1d(output, filters=filter, stride=4, padding='SAME')
     output = lrelu(output)
     output = phaseshuffle(output)
@@ -119,4 +118,10 @@ def Discriminator(x, kernel_len=25, dim=64, use_batchnorm=False, phaseshuffle_ra
 
   	# Don't need to aggregate batchnorm update ops like we do for the generator because we only use the discriminator for training
 
-  	return output
+  	return output, tf.nn.sigmoid(output)
+
+if __name__ == '__main__':
+    a = tf.random_normal([1,8192,1])
+    out, sig = Discriminator(a)
+
+    print (sig)
