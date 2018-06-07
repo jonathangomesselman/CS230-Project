@@ -13,7 +13,6 @@ r = 4
 layers = 4
 
 def spline_up(x_lr, r):
-  #print('x_lr', x_lr.shape)
   x_lr = x_lr.flatten()
   x_hr_len = len(x_lr) * r
   x_sp = np.zeros(x_hr_len)
@@ -28,7 +27,7 @@ def spline_up(x_lr, r):
 
   return x_sp
 
-def load_batch(batch, inputs, alpha=1, train=True,):
+def load_batch(batch, inputs, alpha=1, train=True):
     X_in, Y_in, alpha_in = inputs
     X, Y = batch
     
@@ -48,10 +47,10 @@ def load_batch(batch, inputs, alpha=1, train=True,):
     return feed_dict
 
 def returnFeedDict(X, inputs, predictions, sess):
-    assert len(X) == 1
+    '''assert len(X) == 1
     x_sp = spline_up(X, r)
     x_sp = x_sp[:len(x_sp) - (len(x_sp) % (2**(layers+1)))]
-    X = x_sp.reshape((1,len(x_sp),1))
+    X = x_sp.reshape((1,len(x_sp),1))'''
     feed_dict = load_batch((X,X), inputs, train=True)
     return feed_dict
     #return sess.run(predictions, feed_dict=feed_dict)
@@ -61,7 +60,7 @@ class AudioSRGanModel:
 
     # Note used to have a config variable here
     # This will eventually be very useful I think for loading in the settings
-    def __init__(self, config, ckpt, batch_size=1, H_R=8192, L_R=2048, sess=None):
+    def __init__(self, config, ckpt, batch_size=1, H_R=8192, L_R=8192, sess=None):
         self.H_R = H_R
         self.L_R = L_R
         self.batch_size = batch_size
@@ -234,6 +233,13 @@ class AudioSRGanModel:
         if self.config.gan == 'SRGan':
             self.d_optim = tf.train.AdamOptimizer(learning_rate=self.config.lr, beta1=self.config.beta1, beta2=self.config.beta2, name='AdamDiscrim').minimize(self.d_loss, var_list=self.d_vars)
             self.g_optim = tf.train.AdamOptimizer(learning_rate=self.config.lr, beta1=self.config.beta1, beta2=self.config.beta2, name='AdamGen').minimize(self.g_loss, var_list=self.g_vars)
+        elif self.config.gan == 'WGan':
+            doptim = tf.train.RMSPropOptimizer(learning_rate=self.config.lr, name='RMSDiscrim')
+            self.g_optim = tf.train.RMSPropOptimizer(learning_rate=self.config.lr, name='RMSGen').minimize(self.g_loss, var_list=self.g_vars)
+            gv_d = doptim.compute_gradients(self.d_loss, var_list=self.d_vars)
+            clip_bounds = [-.01, .01]
+            capped_grads = [(tf.clip_by_value(grad, clip_bounds[0], clip_bounds[1]), var) for grad, var in gv_d]
+            self.d_optim = doptim.apply_gradients(capped_grads)
 
         # May not need this stuff
         # This is just for logs
@@ -253,62 +259,68 @@ class AudioSRGanModel:
         def inference_mse_content_loss(real, fake):
             return tf.reduce_mean(tf.square(real-fake))
             
-		def inference_adversarial_loss(x, y, w=1, type_='SRgan'):
-			# Use binary cross entropy for now not wesserstein gans
-			if type_=='SRgan':
-				try:
-					return w*tf.nn.sigmoid_cross_entropy_with_logits(logits=x, labels=y)
-				except:
-					return w*tf.nn.sigmoid_cross_entropy_with_logits(logits=x, labels=y)
-			elif self.config.gan == 'WGan': #Wessertein gan
-				# Simply return the logits
-				return x
+        def inference_adversarial_loss(x, y, w=1, type_='SRgan'):
+            # Use binary cross entropy for now not wesserstein gans
+            if type_=='SRgan':
+                try:
+                    return w*tf.nn.sigmoid_cross_entropy_with_logits(logits=x, labels=y)
+                except:
+                    return w*tf.nn.sigmoid_cross_entropy_with_logits(logits=x, labels=y)
+            elif self.config.gan == 'WGan': #Wessertein gan
+                # Simply return the logits
+                return x
 
         
-		content_loss = inference_mse_content_loss(real, fake)
-		with tf.name_scope('D_real'), tf.variable_scope('D'):
-			d_real_logits, d_real_sigmoid = self.Discriminator(real)
-		# Get variables
-		self.d_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='D')
+        content_loss = inference_mse_content_loss(real, fake)
+        with tf.name_scope('D_real'), tf.variable_scope('D'):
+            d_real_logits, d_real_sigmoid = self.Discriminator(real)
+        # Get variables
+        self.d_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='D')
+        #print(self.d_vars)
 
-		# Create the fake discriminator
-		with tf.name_scope('D_fake'), tf.variable_scope('D', reuse=True):
-			d_fake_logits, d_fake_sigmoid = self.Discriminator(fake)
+        # Create the fake discriminator
+        with tf.name_scope('D_fake'), tf.variable_scope('D', reuse=True):
+            d_fake_logits, d_fake_sigmoid = self.Discriminator(fake)
 
-		# I believe that the logits should be switched here but in the end it does not actually matter
-		# i.e. d_fake uses fake logits and d_real uses real logits
-		d_fake_loss = tf.reduce_mean(inference_adversarial_loss(d_real_logits, tf.ones_like(d_real_sigmoid)))
-		d_real_loss = tf.reduce_mean(inference_adversarial_loss(d_fake_logits, tf.zeros_like(d_fake_sigmoid)))
-		g_fake_loss = tf.reduce_mean(inference_adversarial_loss(d_fake_logits, tf.ones_like(d_fake_sigmoid)))
+        #d_real_logits = tf.Print(d_real_logits, [d_real_logits], message='d_real_logits')
+        #d_fake_logits = tf.Print(d_fake_logits, [d_fake_logits], message='d_fake_logits')
+        # I believe that the logits should be switched here but in the end it does not actually matter
+        # i.e. d_fake uses fake logits and d_real uses real logits
+        d_real_loss = tf.reduce_mean(inference_adversarial_loss(d_real_logits, tf.ones_like(d_real_sigmoid)))
+        d_fake_loss = tf.reduce_mean(inference_adversarial_loss(d_fake_logits, tf.zeros_like(d_fake_sigmoid)))
+        g_fake_loss = tf.reduce_mean(inference_adversarial_loss(d_fake_logits, tf.ones_like(d_fake_sigmoid)))
         
-		# self.config.lambd is a paramter that we can set as our configuraion but 
-		# they define it as 0.001
-		d_loss = 0
-		if self.config.gan == 'SRGan':
-			d_loss =  self.config.lambd*(d_fake_loss+d_real_loss)
-		elif self.config.gan == 'WGan':
-			# NOTE!!! THis appears flipped because I believe that the loss calculations are backwards
-			d_loss = tf.reduce_mean(d_fake_logits) -  tf.reduce_mean(d_real_logits)
+        
+        #d_fake_loss = tf.Print(d_fake_loss, [d_fake_loss], message='d_fake_loss:')
+        #d_real_loss = tf.Print(d_real_loss, [d_real_loss], message='d_real_loss')
+        # self.config.lambd is a paramter that we can set as our configuraion but 
+        # they define it as 0.001
+        d_loss = 0
+        if self.config.gan == 'SRGan':
+            d_loss =  self.config.lambd*(d_fake_loss+d_real_loss)
+        elif self.config.gan == 'WGan':
+            # NOTE!!! THis appears flipped because I believe that the loss calculations are backwards
+            d_loss = tf.reduce_mean(d_real_logits) -  tf.reduce_mean(d_fake_logits)
 
-		# Set up the weight weight clipping if we are using wesserstein gans
-		with tf.name_scope('D_clip_weights'):
-			clip_ops = []
-			for var in self.d_vars:
-				clip_bounds = [-.01, .01]
-				clip_ops.append(
-				tf.assign(
-					var,
-					tf.clip_by_value(var, clip_bounds[0], clip_bounds[1])
-					)
-				)
-	      	self.D_clip_weights = tf.group(*clip_ops)
+        # Set up the weight weight clipping if we are using wesserstein gans
+        '''with tf.name_scope('D_clip_weights'):
+            clip_ops = []
+            for var in self.d_vars:
+                clip_bounds = [-.01, .01]
+                clip_ops.append(
+                tf.assign(
+                    var,
+                    tf.clip_by_value(var, clip_bounds[0], clip_bounds[1])
+                    )
+                )
+            self.D_clip_weights = tf.group(*clip_ops)'''
 
-	    g_loss = 0
-	    if self.config.gan == 'SRGan':
-			g_loss = content_loss + self.config.lambd*g_fake_loss
-		elif self.config.gan =='WGan':
-			# May want a constant
-			g_loss = content_loss - tf.reduce_mean(d_fake_logits)
+        g_loss = 0
+        if self.config.gan == 'SRGan':
+            g_loss = content_loss + self.config.lambd*g_fake_loss
+        elif self.config.gan =='WGan':
+            # May want a constant
+            g_loss = content_loss - tf.reduce_mean(d_fake_logits)
         
         return d_loss, g_loss, content_loss
 
@@ -341,57 +353,57 @@ class AudioSRGanModel:
             counter = 1
         '''
         
-		print('total steps:{}'.format(self.config.epoches*batch_idxs))
+        print('total steps:{}'.format(self.config.epoches*batch_idxs))
 
-		start_time = time.time()
-		for epoch in range(self.config.epoches):
-			# Shuffle data
-			permutation = np.random.permutation(data_HR.shape[0])
-			data_HR = data_HR[permutation]
-			data_LR = data_LR[permutation]
-			for idx in range(batch_idxs):
-				# I am assuming that this is to start one training example
-				# that is a HR example
-				batch_HR = data_HR[idx*self.batch_size:(idx+1)*self.batch_size, :, :]
+        start_time = time.time()
+        for epoch in range(self.config.epoches):
+            # Shuffle data
+            permutation = np.random.permutation(data_HR.shape[0])
+            data_HR = data_HR[permutation]
+            data_LR = data_LR[permutation]
+            for idx in range(batch_idxs):
+                # I am assuming that this is to start one training example
+                # that is a HR example
+                batch_HR = data_HR[idx*self.batch_size:(idx+1)*self.batch_size, :, :]
 
-				# I am assuming that this is to start one training example
-				# that is a LR example
-				batch_LR = data_LR[idx*self.batch_size:(idx+1)*self.batch_size, :, :]
-				print batch_LR.shape
-				feed_dict = returnFeedDict(batch_LR, tf.get_collection('inputs'), self.fake, self.sess)
+                # I am assuming that this is to start one training example
+                # that is a LR example
+                batch_LR = data_LR[idx*self.batch_size:(idx+1)*self.batch_size, :, :]
+                #print batch_LR.shape
+                feed_dict = returnFeedDict(batch_LR, tf.get_collection('inputs'), self.fake, self.sess)
                 feed_dict[self.input_target] = batch_HR
+                #print(batch_HR)
+                #print(batch_LR)
+                #print(feed_dict)
 
-				# Here we will train the discriminator more!
-				# Train suggested 5 times discriminator per generator
-				for i in xrange(self.config.d_updates):
-					if self.config.gan == 'SRGan':
-						#_, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict={self.input_target:batch_HR, self.input_generator: batch_LR})
-						 _, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict=feed_dict)
-					elif self.config.gan == 'WGan':
-						#_, d_loss, summaries, _ = self.sess.run([self.d_optim, self.d_loss, self.summaries, self.D_clip_weights], feed_dict={self.input_target:batch_HR, self.input_generator: batch_LR})
-						 _, d_loss, summaries, _ = self.sess.run([self.d_optim, self.d_loss, self.summaries, self.D_clip_weights], feed_dict=feed_dict)
 
-					print 'here'
+                # Here we will train the discriminator more!
+                # Train suggested 5 times discriminator per generator
+                for i in xrange(self.config.d_updates):
+                    if self.config.gan == 'SRGan':
+                        #_, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict={self.input_target:batch_HR, self.input_generator: batch_LR})
+                         _, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict=feed_dict)
+                    elif self.config.gan == 'WGan':
+                        #_, d_loss, summaries, _ = self.sess.run([self.d_optim, self.d_loss, self.summaries, self.D_clip_weights], feed_dict={self.input_target:batch_HR, self.input_generator: batch_LR})
+                         _, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict=feed_dict)
 
-				# Train the generator
-				#_, g_loss, summaries= self.sess.run([self.g_optim, self.g_loss, self.summaries], feed_dict={self.input_target:batch_HR, self.input_generator: batch_LR})
-				_, g_loss, summaries= self.sess.run([self.g_optim, self.g_loss, self.summaries], feed_dict=feed_dict)
-				end_time = time.time()
-				print('epoch{}[{}/{}]:total_time:{:.4f},d_loss:{:.4f},g_loss:{:4f},psnr:{:.4f}'.format(epoch, idx, batch_idxs, end_time-start_time, d_loss, g_loss, psnr))
+                    #print 'here'
 
-				# We will definitely want this later --- Woddy knows best about saving checkpoints!
+                # Train the generator
+                _, g_loss, summaries= self.sess.run([self.g_optim, self.g_loss, self.summaries], feed_dict=feed_dict)
+                #g_loss, summaries= self.sess.run([self.g_loss, self.summaries], feed_dict=feed_dict)
+                end_time = time.time()
+                print('epoch{}[{}/{}]:total_time:{:.4f},d_loss:{:.12f},g_loss:{:12f}'.format(epoch, idx, batch_idxs, end_time-start_time, d_loss, g_loss))
+
+                # We will definitely want this later --- Woddy knows best about saving checkpoints!
                 self.summary_writer.add_summary(summaries, global_step=counter)
                 self.summary_writer.flush()
-
-				# We will definitely want this later --- Woddy knows best about saving checkpoints!
-				#self.summary_writer.add_summary(summaries, global_step=counter)
-				'''
-				if np.mod(counter, 100)==0:
-				    self.sample(epoch, idx)
-				if np.mod(counter, 500)==0:
-				    self.save_model(self.config.checkpoint_dir, counter)
-				'''
-				counter = counter+1
-			if ((epoch / 1) == epoch):
+                '''
+                if np.mod(counter, 100)==0:
+                    self.sample(epoch, idx)
+                if np.mod(counter, 500)==0:
+                    self.save_model(self.config.checkpoint_dir, counter)
+                '''
+                counter = counter+1
+            if ((epoch / 1) == epoch):
                 self.saver.save(self.sess, './', global_step = epoch + 1)
-	        

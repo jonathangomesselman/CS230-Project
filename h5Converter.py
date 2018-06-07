@@ -1,10 +1,22 @@
 import h5py
 import numpy as np
 from scipy.signal import decimate
+from scipy import interpolate
 
 r = 4
+layers = 4
 
-
+def decimate_helper_splined(arr):
+    x_lr = decimate(arr, r, axis=0)
+    x_hr_len = len(x_lr) * r
+    x_sp = np.zeros(x_hr_len)
+    i_lr = np.arange(x_hr_len, step=r)
+    i_hr = np.arange(x_hr_len)
+    f = interpolate.splrep(i_lr, x_lr)
+    x_sp = interpolate.splev(i_hr, f)
+    x_sp = x_sp[:len(x_sp) - (len(x_sp) % (2**(layers+1)))]
+    return x_sp
+    
 def decimate_helper(arr):
     return decimate(arr, r, axis=0)
 
@@ -13,10 +25,11 @@ def load_h5(h5_path):
   with h5py.File(h5_path, 'r') as hf:
     print 'List of arrays in input file:', hf.keys()
     X = np.array(hf.get('data'))
-    Y_HR = np.array(hf.get('label'))
-    Y_LR = np.apply_along_axis(decimate_helper, 1, Y_HR)
+    Y = np.array(hf.get('label'))
+    Y_out = np.apply_along_axis(decimate_helper_splined, 1, Y)
     #print Y.shape
-    return Y_HR, Y_LR
+    #print Y_out.shape
+    return Y, Y_out
     #really sketchy, but begins the concatenation so that vstack can be done later
     # x_hr0 = Y[0]
     # print x_hr0.shape
@@ -42,7 +55,7 @@ def load_h5(h5_path):
     # print 'Shape of Y:', Y.shape
 
 def main():
-    load_h5('./data/vctk/speaker1/vctk-speaker1-train.4.16000.8192.4096.h5')
+    load_h5('./vctk-speaker1-train.4.16000.8192.4096.h5')
 
 if __name__ == '__main__':
     main()
