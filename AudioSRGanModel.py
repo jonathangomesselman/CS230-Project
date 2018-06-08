@@ -8,6 +8,7 @@ import librosa
 from scipy import interpolate
 from scipy.signal import decimate
 from h5Converter import load_h5
+import random
 
 r = 4
 layers = 4
@@ -302,7 +303,9 @@ class AudioSRGanModel:
             d_loss =  self.config.lambd*(d_fake_loss+d_real_loss)
         elif self.config.gan == 'WGan':
             # NOTE!!! THis appears flipped because I believe that the loss calculations are backwards
-            d_loss = tf.reduce_mean(d_real_logits) -  tf.reduce_mean(d_fake_logits)
+            # CHANGE THESE LOSSES
+            #d_loss = tf.reduce_mean(d_real_logits) -  tf.reduce_mean(d_fake_logits)
+            d_loss = tf.reduce_mean(d_fake_logits) -  tf.reduce_mean(d_real_logits)
 
         # Set up the weight weight clipping if we are using wesserstein gans
         with tf.name_scope('D_clip_weights'):
@@ -372,8 +375,8 @@ class AudioSRGanModel:
                 # that is a LR example
                 batch_LR = data_LR[idx*self.batch_size:(idx+1)*self.batch_size, :, :]
                 #print batch_LR.shape
-                feed_dict = returnFeedDict(batch_LR, tf.get_collection('inputs'), self.fake, self.sess)
-                feed_dict[self.input_target] = batch_HR
+                feed_dict_init = returnFeedDict(batch_LR, tf.get_collection('inputs'), self.fake, self.sess)
+                feed_dict_init[self.input_target] = batch_HR
                 #print(batch_HR)
                 #print(batch_LR)
                 #print(feed_dict)
@@ -382,6 +385,15 @@ class AudioSRGanModel:
                 # Here we will train the discriminator more!
                 # Train suggested 5 times discriminator per generator
                 for i in xrange(self.config.d_updates):
+                    if (i == 0):
+                        feed_dict = feed_dict_init
+                    else:
+                        randidx = random.randint(0, batch_idxs - 1)
+                        batch_HR = data_HR[randidx*self.batch_size:(randidx+1)*self.batch_size, :, :]
+                        batch_LR = data_LR[randidx*self.batch_size:(randidx+1)*self.batch_size, :, :]
+                        feed_dict = returnFeedDict(batch_LR, tf.get_collection('inputs'), self.fake, self.sess)
+                        feed_dict[self.input_target] = batch_HR
+                    #print(batch_LR)
                     if self.config.gan == 'SRGan':
                         #_, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict={self.input_target:batch_HR, self.input_generator: batch_LR})
                         _, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict=feed_dict)
@@ -393,7 +405,7 @@ class AudioSRGanModel:
                     #print 'here'
 
                 # Train the generator
-                _, g_loss, summaries= self.sess.run([self.g_optim, self.g_loss, self.summaries], feed_dict=feed_dict)
+                _, g_loss, summaries= self.sess.run([self.g_optim, self.g_loss, self.summaries], feed_dict=feed_dict_init)
                 #g_loss, summaries= self.sess.run([self.g_loss, self.summaries], feed_dict=feed_dict)
                 end_time = time.time()
                 print('epoch{}[{}/{}]:total_time:{:.4f},d_loss:{:.12f},g_loss:{:12f}'.format(epoch, idx, batch_idxs, end_time-start_time, d_loss, g_loss))
