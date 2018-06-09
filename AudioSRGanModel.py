@@ -86,7 +86,7 @@ class AudioSRGanModel:
         # Get the input tensor for the generator
         self.input_generator, Y, alpha = tf.get_collection('inputs')
         print self.input_generator.shape
-        #self.input_generator = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'discriminatorGan')
+
         # Get graph tensors
         predictions = tf.get_collection('preds')[0]
         return predictions
@@ -301,10 +301,10 @@ class AudioSRGanModel:
         if self.config.gan == 'SRGan':
             d_loss =  self.config.lambd*(d_fake_loss+d_real_loss)
         elif self.config.gan == 'WGan':
-            # NOTE!!! THis appears flipped because I believe that the loss calculations are backwards
+        	# I think that the logits should be switched here
             d_loss = tf.reduce_mean(d_real_logits) -  tf.reduce_mean(d_fake_logits)
 
-        # Set up the weight weight clipping if we are using wesserstein gans
+        # Set up the weight weight clipping if we are using Wasserstein gans
         with tf.name_scope('D_clip_weights'):
             clip_ops = []
             for var in self.d_vars:
