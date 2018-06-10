@@ -7,13 +7,25 @@ import keras
 import librosa
 from scipy import interpolate
 from scipy.signal import decimate
-from h5Converter import load_h5
+#from h5Converter import load_h5
 import random
+import h5py
 
 r = 4
 layers = 4
 
-def spline_up(x_lr, r):
+def load_h5(h5_path):
+  # load training data
+  with h5py.File(h5_path, 'r') as hf:
+    print 'List of arrays in input file:', hf.keys()
+    X = np.array(hf.get('data'))
+    Y = np.array(hf.get('label'))
+    print 'Shape of X:', X.shape
+    print 'Shape of Y:', Y.shape
+
+  return X, Y
+
+'''def spline_up(x_lr, r):
   x_lr = x_lr.flatten()
   x_hr_len = len(x_lr) * r
   x_sp = np.zeros(x_hr_len)
@@ -26,7 +38,7 @@ def spline_up(x_lr, r):
   x_sp = interpolate.splev(i_hr, f)
   #print('x_sp', x_sp.shape)
 
-  return x_sp
+  return x_sp'''
 
 def load_batch(batch, inputs, alpha=1, train=True):
     X_in, Y_in, alpha_in = inputs
@@ -87,7 +99,7 @@ class AudioSRGanModel:
         # Get the input tensor for the generator
         self.input_generator, Y, alpha = tf.get_collection('inputs')
         print self.input_generator.shape
-
+        #self.input_generator = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'discriminatorGan')
         # Get graph tensors
         predictions = tf.get_collection('preds')[0]
         return predictions
@@ -325,7 +337,7 @@ class AudioSRGanModel:
 			gradient_penalty = tf.reduce_mean((slopes - 1.) ** 2.)
 			d_loss += LAMBDA * gradient_penalty
 
-        # Set up the weight weight clipping if we are using Wasserstein gans
+        # Set up the weight weight clipping if we are using wesserstein gans
         with tf.name_scope('D_clip_weights'):
             clip_ops = []
             for var in self.d_vars:
@@ -343,7 +355,7 @@ class AudioSRGanModel:
             g_loss = content_loss + self.config.lambd*g_fake_loss
         elif self.config.gan =='WGan' of self.config.gan == 'WGan-gp':
             # May want a constant
-            g_loss = content_loss - tf.reduce_mean(d_fake_logits)
+            g_loss = content_loss - (self.config.lambd * tf.reduce_mean(d_fake_logits))
         
         return d_loss, g_loss, content_loss
 
@@ -358,7 +370,8 @@ class AudioSRGanModel:
         # Get the data!!!
         # These data sets should line up
         path = '../data/vctk/speaker1/vctk-speaker1-train.4.16000.8192.4096.h5'
-        data_HR, data_LR = load_h5(path)
+        #data_HR, data_LR = load_h5(path)
+        data_LR, data_HR = load_h5(path)
         print data_HR.shape
         print data_LR.shape
 
