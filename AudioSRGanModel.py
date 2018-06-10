@@ -243,6 +243,9 @@ class AudioSRGanModel:
             #clip_bounds = [-.01, .01]
             capped_grads, _ = (tf.clip_by_global_norm(gv_d, 1.0))
             self.d_optim = doptim.apply_gradients(zip(capped_grads, self.d_vars))
+        elif self.config.gan == 'WGan-gp':
+			self.g_optim = tf.train.AdamOptimizer(learning_rate=1e-4, beta1=0.5, beta2=0.9, name='AdamDiscrim').minimize(self.d_loss, var_list=self.d_vars)
+        	self.d_optim = tf.train.AdamOptimizer(learning_rate=1e-4, beta1=0.5, beta2=0.9, name='AdamGen').minimize(self.g_loss, var_list=self.g_vars)
 
         # May not need this stuff
         # This is just for logs
@@ -306,6 +309,21 @@ class AudioSRGanModel:
             # CHANGE THESE LOSSES
             #d_loss = tf.reduce_mean(d_real_logits) -  tf.reduce_mean(d_fake_logits)
             d_loss = tf.reduce_mean(d_fake_logits) -  tf.reduce_mean(d_real_logits)
+        elif self.config.gan == 'WGan-gp':
+			d_loss = tf.reduce_mean(d_fake_logits) - tf.reduce_mean(d_real_logits)
+
+			# Use batch size of 64
+			alpha = tf.random_uniform(shape=[64, 1, 1], minval=0., maxval=1.)
+			differences = fake - real
+			interpolates = real + (alpha * differences)
+			with tf.name_scope('D_interp'), tf.variable_scope('D', reuse=True):
+				D_interp = self.Discriminator(interpolates)
+
+			LAMBDA = 10
+			gradients = tf.gradients(D_interp, [interpolates])[0]
+			slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1, 2]))
+			gradient_penalty = tf.reduce_mean((slopes - 1.) ** 2.)
+			d_loss += LAMBDA * gradient_penalty
 
         # Set up the weight weight clipping if we are using Wasserstein gans
         with tf.name_scope('D_clip_weights'):
@@ -323,7 +341,7 @@ class AudioSRGanModel:
         g_loss = 0
         if self.config.gan == 'SRGan':
             g_loss = content_loss + self.config.lambd*g_fake_loss
-        elif self.config.gan =='WGan':
+        elif self.config.gan =='WGan' of self.config.gan == 'WGan-gp':
             # May want a constant
             g_loss = content_loss - tf.reduce_mean(d_fake_logits)
         
@@ -401,6 +419,8 @@ class AudioSRGanModel:
                         #_, d_loss, summaries, _ = self.sess.run([self.d_optim, self.d_loss, self.summaries, self.D_clip_weights], feed_dict={self.input_target:batch_HR, self.input_generator: batch_LR})
                         self.sess.run(self.D_clip_weights)
                         _, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict=feed_dict)
+                    elif self.config.gan == 'WGan-gp':
+                    	 _, d_loss, summaries = self.sess.run([self.d_optim, self.d_loss, self.summaries], feed_dict=feed_dict)
 
                     #print 'here'
 
